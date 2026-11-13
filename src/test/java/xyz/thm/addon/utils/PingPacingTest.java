@@ -57,4 +57,16 @@ class PingPacingTest {
         assertEquals(0, p.pingMs());
         assertEquals(3, p.resendTicks(3));
     }
+
+    @Test
+    void jitterAddsABreakMargin() {
+        PingPacing steady = new PingPacing();
+        for (int i = 0; i < 50; i++) steady.update(120);
+        assertEquals(0, steady.breakMarginTicks());
+        PingPacing jumpy = new PingPacing();
+        for (int i = 0; i < 50; i++) jumpy.update(i % 2 == 0 ? 60 : 200);
+        assertEquals(1, jumpy.breakMarginTicks());
+        jumpy.reset();
+        assertEquals(0, jumpy.breakMarginTicks());
+    }
 }
