@@ -1883,6 +1883,7 @@ public class HighwayBuilderTHM extends Module {
     private final ConcurrentLinkedQueue<Long> revertedBlockUpdates = new ConcurrentLinkedQueue<>();
     private final AtomicInteger pendingRubberbands = new AtomicInteger();
 
+    private final PingPacing pingPacing = new PingPacing();
     private final GhostBlockProbe ghostProbe = new GhostBlockProbe(20);
     private volatile boolean ghostProbeListening;
     // {pos, solid ? 1 : 0}, filled from the netty thread.
@@ -5496,6 +5497,7 @@ public class HighwayBuilderTHM extends Module {
         count = 0;
         forwardMineCount = 0;
         forwardPlaceCount = 0;
+        tickPingPacing();
         tickAdaptivePlacement();
         tickAdaptiveMining();
         mineActionsThisTick = computeMineActionsThisTick();
@@ -7889,6 +7891,15 @@ public class HighwayBuilderTHM extends Module {
         return adaptiveMining.get() && adaptiveMineRate.get() > 0 ? adaptiveMineRate.get() : sanitizeMineActionRate(blocksPerTick.get());
     }
 
+    private void tickPingPacing() {
+        if (mc.player == null) return;
+        var info = mc.getConnection() == null ? null : mc.getConnection().getPlayerInfo(mc.player.getUUID());
+        // Latency 0 means the tab list has no sample yet.
+        if (info != null && info.getLatency() > 0) pingPacing.update(info.getLatency());
+        adaptivePlaceRate.setStableTicksPerStep(pingPacing.stableTicksPerStep(200));
+        adaptiveMineRate.setStableTicksPerStep(pingPacing.stableTicksPerStep(200));
+    }
+
     private void tickAdaptiveMining() {
         if (!adaptiveMining.get()) {
             breakWatch.clear();
@@ -7909,7 +7920,7 @@ public class HighwayBuilderTHM extends Module {
                 it.remove();
                 continue;
             }
-            if (now - v[0] > ADAPTIVE_PLACE_REVERT_WINDOW) it.remove();
+            if (now - v[0] > pingPacing.revertWindow(ADAPTIVE_PLACE_REVERT_WINDOW)) it.remove();
         }
 
         if (state != State.Forward) return;
@@ -7931,6 +7942,7 @@ public class HighwayBuilderTHM extends Module {
     }
 
     private void resetAdaptivePlacement() {
+        pingPacing.reset();
         adaptivePlaceRate.reset(sanitizePlaceActionRate(placementsPerTick.get()));
         adaptiveMineRate.reset(sanitizeMineActionRate(blocksPerTick.get()));
         breakWatch.clear();
@@ -7975,7 +7987,8 @@ public class HighwayBuilderTHM extends Module {
                 reverts++;
             }
         }
-        recentPlacements.values().removeIf(t -> now - t > ADAPTIVE_PLACE_REVERT_WINDOW);
+        int revertWindow = pingPacing.revertWindow(ADAPTIVE_PLACE_REVERT_WINDOW);
+        recentPlacements.values().removeIf(t -> now - t > revertWindow);
 
         if (state != State.Forward || (packetBuild.get() && !normalRatePacketBuild())) return;
 
@@ -8994,7 +9007,7 @@ public class HighwayBuilderTHM extends Module {
             } finally {
                 packetBuildSending = null;
             }
-            if (trackPending) PacketPlaceTracker.markSent(target, normalRatePacketBuild() ? packetBuildResend.get() : 3);
+            if (trackPending) PacketPlaceTracker.markSent(target, pingPacing.resendTicks(normalRatePacketBuild() ? packetBuildResend.get() : 3));
             if (isRestockState(state)) restockPacketPlaceTargets.add(target.asLong());
             notePlacement(target);
             if (renderPlace.get()) placeTrail.add(target.asLong());
