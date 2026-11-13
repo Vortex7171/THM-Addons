@@ -15,21 +15,16 @@ public final class PingPacing {
     private static final int MAX_PING = 1000;
 
     private double smoothed = -1;
-    private double jitter;
 
     /** Feed the raw tab-list latency once per tick; a drop is followed faster than a spike. */
     public void update(int pingMs) {
         double sample = Math.max(0, Math.min(MAX_PING, pingMs));
         if (smoothed < 0) smoothed = sample;
-        else {
-            jitter += ALPHA * (Math.abs(sample - smoothed) - jitter);
-            smoothed += (sample > smoothed ? ALPHA : ALPHA * 3) * (sample - smoothed);
-        }
+        else smoothed += (sample > smoothed ? ALPHA : ALPHA * 3) * (sample - smoothed);
     }
 
     public void reset() {
         smoothed = -1;
-        jitter = 0;
     }
 
     public int pingMs() {
@@ -58,10 +53,5 @@ public final class PingPacing {
         if (ping <= 120) return Math.max(40, base / 2);
         if (ping <= 180) return base;
         return base * 3 / 2;
-    }
-
-    /** One extra tick of break progress before STOP on a jittery link, so it can't reach the server a tick early and be refused. */
-    public int breakMarginTicks() {
-        return jitter >= 35 ? 1 : 0;
     }
 }

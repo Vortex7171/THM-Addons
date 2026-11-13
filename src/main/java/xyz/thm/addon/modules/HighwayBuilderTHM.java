@@ -21090,8 +21090,7 @@ public class HighwayBuilderTHM extends Module {
         }
 
         public boolean isReady() {
-            double delta = BlockUtils.getBreakDelta(b.mc.player.getInventory().getSelectedSlot(), blockState);
-            return progress() >= (b.fastBreak.get() ? 0.7 : 1.0) + b.pingPacing.breakMarginTicks() * delta;
+            return progress() >= (b.fastBreak.get() ? 0.7 : 1.0);
         }
 
         public boolean shouldRemove() {
