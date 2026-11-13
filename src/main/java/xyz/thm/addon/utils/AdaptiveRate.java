@@ -13,7 +13,8 @@ package xyz.thm.addon.utils;
  */
 public final class AdaptiveRate {
     private final double min, max, down, up;
-    private final int stableTicksPerStep, probeTicks;
+    private final int probeTicks;
+    private int stableTicksPerStep;
     private double rate;
     private double ceiling = Double.POSITIVE_INFINITY;
     private int stableTicks, capTicks;
@@ -25,6 +26,10 @@ public final class AdaptiveRate {
         this.up = up;
         this.stableTicksPerStep = stableTicksPerStep;
         this.probeTicks = probeTicks;
+    }
+
+    public void setStableTicksPerStep(int ticks) {
+        stableTicksPerStep = Math.max(1, ticks);
     }
 
     public void reset(double start) {
