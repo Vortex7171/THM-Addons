@@ -1090,7 +1090,7 @@ public class HighwayBuilderTHM extends Module {
     public final Setting<Boolean> adaptiveMining = sgDigging.add(new BoolSetting.Builder()
         .name("adaptive-mining")
         .description("Lowers blocks-per-tick when the server puts broken blocks back, raises it up to 29 when stable.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 
@@ -1405,7 +1405,7 @@ public class HighwayBuilderTHM extends Module {
     public final Setting<Boolean> adaptivePlacements = sgPaving.add(new BoolSetting.Builder()
         .name("adaptive-placements")
         .description("Lowers placements-per-tick on rubberbands or reverted placements, raises it back up to 3 when stable.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 
@@ -14767,11 +14767,13 @@ public class HighwayBuilderTHM extends Module {
 
     private boolean runForwardPlaceQueue(ForwardRowSchedule row, LinkedHashMap<BlockPos, ForwardTask> queue, boolean conflictQueue) {
         if (row == null || queue == null || queue.isEmpty()) return false;
+        // Lookahead rows reach here with the budget already spent; skip the copy and sort.
+        if (forwardPlaceCount >= currentPlaceActionsThisTick() || placeTimer > 0) return false;
 
         boolean changedWorld = false;
         List<ForwardTask> snapshot = new ArrayList<>(queue.values());
         Vec3 eyePos = mc.player.getEyePosition();
-        snapshot.sort(Comparator.comparingDouble(task -> task.pos.distToCenterSqr(eyePos)));
+        if (snapshot.size() > 1) snapshot.sort(Comparator.comparingDouble(task -> task.pos.distToCenterSqr(eyePos)));
         for (ForwardTask task : snapshot) {
             if (forwardPlaceCount >= currentPlaceActionsThisTick() || placeTimer > 0) break;
             if (!shouldKeepForwardPlaceTask(task)) {
