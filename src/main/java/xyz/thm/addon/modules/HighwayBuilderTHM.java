@@ -1090,7 +1090,7 @@ public class HighwayBuilderTHM extends Module {
     public final Setting<Boolean> adaptiveMining = sgDigging.add(new BoolSetting.Builder()
         .name("adaptive-mining")
         .description("Lowers blocks-per-tick when the server puts broken blocks back, raises it up to 29 when stable.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
@@ -1405,7 +1405,7 @@ public class HighwayBuilderTHM extends Module {
     public final Setting<Boolean> adaptivePlacements = sgPaving.add(new BoolSetting.Builder()
         .name("adaptive-placements")
         .description("Lowers placements-per-tick on rubberbands or reverted placements, raises it back up to 3 when stable.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
@@ -5503,7 +5503,7 @@ public class HighwayBuilderTHM extends Module {
         mineActionsThisTick = computeMineActionsThisTick();
         placeActionsThisTick = computePlaceActionsThisTick();
         pruneExpiredForwardBreakCredits();
-        refreshCountedForwardStatPositions();
+        if (!(state == State.Forward && useForwardRowSchedulerMode())) refreshCountedForwardStatPositions();
 
         if (mc.player.getY() < start.y - 0.5) setState(State.ReLevel); // don't let the current state keep ticking, switch to re-levelling straight away
         if (tickKitbotRestockPause()) return;
@@ -14190,16 +14190,21 @@ public class HighwayBuilderTHM extends Module {
 
         double center = Double.isFinite(minLateral) && Double.isFinite(maxLateral) ? (minLateral + maxLateral) / 2.0 : 0.0;
 
-        List<ForwardTask> orderedTasks = new ArrayList<>(tasks);
-        orderedTasks.sort(Comparator
-            .comparingDouble((ForwardTask task) -> Math.abs(projectedLateralCoordinate(task.pos) - center))
-            .thenComparingDouble(task -> projectedLateralCoordinate(task.pos))
-            .thenComparingInt(task -> task.type.ordinal())
-            .thenComparingInt(task -> task.pos.getY())
-            .thenComparingInt(task -> task.pos.getX())
-            .thenComparingInt(task -> task.pos.getZ()));
+        record Keyed(ForwardTask task, double lateral, double fromCenter) {}
+        List<Keyed> ordered = new ArrayList<>(tasks.size());
+        for (ForwardTask task : tasks) {
+            double lateral = projectedLateralCoordinate(task.pos);
+            ordered.add(new Keyed(task, lateral, Math.abs(lateral - center)));
+        }
+        ordered.sort(Comparator
+            .comparingDouble(Keyed::fromCenter)
+            .thenComparingDouble(Keyed::lateral)
+            .thenComparingInt(k -> k.task().type.ordinal())
+            .thenComparingInt(k -> k.task().pos.getY())
+            .thenComparingInt(k -> k.task().pos.getX())
+            .thenComparingInt(k -> k.task().pos.getZ()));
 
-        for (ForwardTask task : orderedTasks) queue.putIfAbsent(task.pos, task);
+        for (Keyed keyed : ordered) queue.putIfAbsent(keyed.task().pos, keyed.task());
         return queue;
     }
 
